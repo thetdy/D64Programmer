@@ -1,0 +1,14 @@
+# Normalize text files and keep LF in the repo
+* text=auto eol=lf
+
+# Explicitly mark common text formats
+*.st  text eol=lf
+*.json text eol=lf
+*.xml text eol=lf
+*.md  text eol=lf
+*.txt text eol=lf
+
+# Treat binaries as binary (no line ending conversion)
+*.png binary
+*.jpg binary
+*.pdf binary

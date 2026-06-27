@@ -1,0 +1,14 @@
+# OpenPLC Build Outputs
+build/
+bin/
+obj/
+
+# ESP32 specific binaries and logs
+*.bin
+*.elf
+*.map
+*.bootloader
+*.partitions
+*.merged.bin
+flasher_args
+sdkconfig
