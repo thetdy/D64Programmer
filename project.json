@@ -54,15 +54,19 @@
         "globalVariables": []
       }
     },
-    "deletedPous": [],
-    "deletedServers": [],
-    "deletedRemoteDevices": [],
     "debugVariables": {
       "pous": {
         "main": [
-          "ReadInputs"
+          "ReadInputs",
+          "WriteOutputs",
+          "TriggerWrite",
+          "WriteDone",
+          "WriteError"
         ]
       }
-    }
+    },
+    "deletedPous": [],
+    "deletedServers": [],
+    "deletedRemoteDevices": []
   }
 }
