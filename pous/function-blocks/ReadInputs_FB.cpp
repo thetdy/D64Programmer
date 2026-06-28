@@ -1,11 +1,13 @@
 FUNCTION_BLOCK ReadInputs_FB
 VAR_OUTPUT
 	serialNumber : string; (* Will show the full serial number in debugger *)
+	operatingMode : int;
+	residualCurrent : dint;
 	commsOK : bool; (* TRUE when we successfully read from D64 *)
 	lastError : int; (* 0 = OK, other = error code (for future use *)
 END_VAR
 /* ================================================================
- * D64 Modbus RTU - Read Serial Number (VERBOSE DEBUGGING)
+ * D64 Modbus RTU - Read Serial, Mode & Residual Current
  * ================================================================ */
 
 #include <Arduino.h> 
@@ -31,32 +33,27 @@ uint16_t calcCRC(uint8_t *buf, uint16_t len) {
 
 void setup() {
     Serial.begin(115200);
-    // UART2 on ESP32: RX=16, TX=17
     Serial2.begin(19200, SERIAL_8E1, 16, 17);
     
     commsOK = false;
     lastError = 0;
-    
-    Serial.println("\n=== D64 Modbus FB Initialized ===");
-    Serial.println("Waiting for scan cycle to begin...");
+    operatingMode = 0; 
+    residualCurrent = 0; // Initialize the new variable
 }
 
 void loop() {
     switch (state) {
         
-        case 0: { 
-            Serial.println("-> Sending Modbus Request...");
+        case 0: { // -- 1. REQUEST SERIAL NUMBER --
             request[0] = SLAVE_ADDR;
             request[1] = 0x03; 
-            request[2] = 0x00;
-            request[3] = 0x20; // Register 32
-            request[4] = 0x00;
-            request[5] = 0x10; // 16 registers
+            request[2] = 0x00; request[3] = 0x20; // Reg 32
+            request[4] = 0x00; request[5] = 0x10; // 16 Regs
             
             uint16_t crc = calcCRC(request, 6);
-            request[6] = crc & 0xFF;
-            request[7] = crc >> 8;
+            request[6] = crc & 0xFF; request[7] = crc >> 8;
 
+            while(Serial2.available()) Serial2.read(); 
             Serial2.write(request, 8);
             
             rx_idx = 0;             
@@ -65,25 +62,21 @@ void loop() {
             break;
         } 
 
-        case 1: { 
+        case 1: { // -- 2. WAIT FOR SERIAL NUMBER --
             while (Serial2.available() && rx_idx < 64) {
                 response[rx_idx++] = Serial2.read();
             }
 
-            // Did we get an error/exception from the D64? (0x83 = Read Holding Reg Error)
-            if (rx_idx >= 5 && response[1] == 0x83) {
+            if (rx_idx >= 5 && response[1] == 0x83) { 
                 commsOK = false;
-                lastError = response[2]; // The Modbus exception code
-                Serial.printf("<- MODBUS EXCEPTION! Code: %d\n", lastError);
+                lastError = response[2]; 
                 state_timer = millis();
-                state = 2;
+                state = 6; // Abort to sleep
                 break;
             }
 
-            // Normal successful header check
             if (rx_idx >= 5 && response[1] == 0x03) {
                 uint8_t expected_len = 5 + response[2]; 
-                
                 if (rx_idx >= expected_len) {
                     commsOK = true;
                     lastError = 0;
@@ -97,34 +90,133 @@ void loop() {
                     }
                     serialNumber.body[byteCount] = '\0'; 
                     
-                    Serial.printf("<- SUCCESS! Serial: %s\n", serialNumber.body);
-                    
                     state_timer = millis(); 
-                    state = 2; 
+                    state = 2; // Move to Operating Mode
                     break; 
                 }
             }
 
-            // Timeout Check (600ms)
-            if (millis() - state_timer > 600) {
+            if (millis() - state_timer > 600) { 
                 commsOK = false;
                 lastError = 1; 
-                
-                Serial.printf("<- TIMEOUT. Bytes received: %d. Data: ", rx_idx);
-                for(int i=0; i<rx_idx; i++) {
-                    Serial.printf("%02X ", response[i]);
-                }
-                Serial.println();
-                
                 state_timer = millis();
-                state = 2; 
+                state = 6; 
             }
             break;
         } 
 
-        case 2: { 
+        case 2: { // -- 3. REQUEST OPERATING MODE --
+            request[0] = SLAVE_ADDR;
+            request[1] = 0x03; 
+            request[2] = 0x7D; request[3] = 0x65; // Reg 32101
+            request[4] = 0x00; request[5] = 0x01; // 1 Reg (2 bytes)
+            
+            uint16_t crc = calcCRC(request, 6);
+            request[6] = crc & 0xFF; request[7] = crc >> 8;
+
+            while(Serial2.available()) Serial2.read(); 
+            Serial2.write(request, 8);
+            
+            rx_idx = 0;             
+            state_timer = millis(); 
+            state = 3;              
+            break;
+        }
+
+        case 3: { // -- 4. WAIT FOR OPERATING MODE --
+            while (Serial2.available() && rx_idx < 64) {
+                response[rx_idx++] = Serial2.read();
+            }
+
+            if (rx_idx >= 5 && response[1] == 0x83) {
+                commsOK = false;
+                lastError = response[2]; 
+                state_timer = millis();
+                state = 6; 
+                break;
+            }
+
+            if (rx_idx >= 5 && response[1] == 0x03) {
+                uint8_t expected_len = 5 + response[2]; 
+                if (rx_idx >= expected_len) {
+                    commsOK = true;
+                    lastError = 0;
+                    
+                    operatingMode = (response[3] << 8) | response[4];
+                    
+                    state_timer = millis(); 
+                    state = 4; // Move to Residual Current
+                    break; 
+                }
+            }
+
+            if (millis() - state_timer > 600) {
+                commsOK = false;
+                lastError = 1; 
+                state_timer = millis();
+                state = 6; 
+            }
+            break;
+        }
+
+        case 4: { // -- 5. REQUEST RESIDUAL CURRENT --
+            request[0] = SLAVE_ADDR;
+            request[1] = 0x03; 
+            request[2] = 0x7D; request[3] = 0x6B; // Reg 32107
+            request[4] = 0x00; request[5] = 0x02; // 2 Regs (4 bytes)
+            
+            uint16_t crc = calcCRC(request, 6);
+            request[6] = crc & 0xFF; request[7] = crc >> 8;
+
+            while(Serial2.available()) Serial2.read(); 
+            Serial2.write(request, 8);
+            
+            rx_idx = 0;             
+            state_timer = millis(); 
+            state = 5;              
+            break;
+        }
+
+        case 5: { // -- 6. WAIT FOR RESIDUAL CURRENT --
+            while (Serial2.available() && rx_idx < 64) {
+                response[rx_idx++] = Serial2.read();
+            }
+
+            if (rx_idx >= 5 && response[1] == 0x83) {
+                commsOK = false;
+                lastError = response[2]; 
+                state_timer = millis();
+                state = 6; 
+                break;
+            }
+
+            if (rx_idx >= 5 && response[1] == 0x03) {
+                uint8_t expected_len = 5 + response[2]; 
+                if (rx_idx >= expected_len) {
+                    commsOK = true;
+                    lastError = 0;
+                    
+                    // Reassemble the 32-bit DINT from four 8-bit bytes
+                    residualCurrent = (response[3] << 24) | (response[4] << 16) | (response[5] << 8) | response[6];
+                    
+                    state_timer = millis(); 
+                    state = 6; // SUCCESS! Move to sleep
+                    break; 
+                }
+            }
+
+            if (millis() - state_timer > 600) {
+                commsOK = false;
+                lastError = 1; 
+                state_timer = millis();
+                state = 6; 
+            }
+            break;
+        }
+
+        case 6: { // -- 7. DELAY BETWEEN POLLS --
             if (millis() - state_timer > 3000) {
-                state = 0; 
+                state = 0; // Restart cycle
             }
             break;
         } 
