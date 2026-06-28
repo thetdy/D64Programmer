@@ -1,0 +1,68 @@
+{
+  "meta": {
+    "name": "D64Programmer",
+    "type": "plc-project"
+  },
+  "data": {
+    "dataTypes": [
+      {
+        "name": "D64_STRUCT",
+        "derivation": "structure",
+        "variable": [
+          {
+            "name": "serialNumber",
+            "type": {
+              "definition": "base-type",
+              "value": "string"
+            }
+          },
+          {
+            "name": "commsOK",
+            "type": {
+              "definition": "base-type",
+              "value": "bool"
+            }
+          },
+          {
+            "name": "lastError",
+            "type": {
+              "definition": "base-type",
+              "value": "int"
+            }
+          }
+        ]
+      }
+    ],
+    "pous": [],
+    "configuration": {
+      "resource": {
+        "tasks": [
+          {
+            "name": "task0",
+            "triggering": "Cyclic",
+            "interval": "T#20ms",
+            "priority": 1
+          }
+        ],
+        "instances": [
+          {
+            "name": "instance0",
+            "task": "task0",
+            "program": "main"
+          }
+        ],
+        "globalVariables": []
+      }
+    },
+    "deletedPous": [],
+    "deletedServers": [],
+    "deletedRemoteDevices": [],
+    "debugVariables": {
+      "pous": {
+        "main": [
+          "ReadInputs"
+        ]
+      }
+    }
+  }
+}

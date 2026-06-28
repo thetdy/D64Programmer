@@ -1,0 +1,29 @@
+{
+  "deviceBoard": "ESP32 Generic",
+  "communicationPort": "/dev/ttyUSB0",
+  "runtimeIpAddress": "",
+  "compileOnly": false,
+  "communicationConfiguration": {
+    "modbusRTU": {
+      "rtuInterface": "Serial",
+      "rtuBaudRate": "115200",
+      "rtuSlaveId": 1,
+      "rtuRS485ENPin": null
+    },
+    "modbusTCP": {
+      "tcpInterface": "Ethernet",
+      "tcpMacAddress": "DE:AD:BE:EF:DE:AD",
+      "tcpStaticHostConfiguration": {
+        "ipAddress": "",
+        "dns": "",
+        "gateway": "",
+        "subnet": ""
+      }
+    },
+    "communicationPreferences": {
+      "enabledRTU": true,
+      "enabledTCP": false,
+      "enabledDHCP": true
+    }
+  }
+}

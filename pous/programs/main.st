@@ -1,0 +1,8 @@
+PROGRAM main
+VAR
+	ReadInputs : READINPUTS_FB;
+END_VAR
+
+ReadInputs();
+
+END_PROGRAM
