@@ -1,23 +1,32 @@
 FUNCTION_BLOCK ReadInputs_FB
+VAR_INPUT
+	startScan : bool;
+END_VAR
+
 VAR_OUTPUT
-	serialNumber : string; (* Will show the full serial number in debugger *)
-	operatingMode : int;
-	residualCurrent : dint;
-	commsOK : bool; (* TRUE when we successfully read from D64 *)
-	lastError : int; (* 0 = OK, other = error code (for future use *)
+	scanComplete : bool;
+	nodeCount : int;
+	nodeAddresses : ARRAY [0..4] OF INT;
+	nodeSerials : ARRAY [0..4] OF STRING;
+	nodeModes : ARRAY [0..4] OF INt;
+	nodeCurrents : ARRAY [0..4] OF DINT;
 END_VAR
 /* ================================================================
- * D64 Modbus RTU - Read Serial, Mode & Residual Current
+ * D64 Modbus RTU - 50-Node Network Scanner
  * ================================================================ */
 
 #include <Arduino.h> 
 
-uint8_t state = 0;
-uint32_t state_timer = 0;
-uint8_t request[8];
-uint8_t response[64];
-uint8_t rx_idx = 0;
-const uint8_t SLAVE_ADDR = 173;
+// -- Scanner State Variables --
+static uint8_t  state = 0;
+static uint32_t state_timer = 0;
+static uint8_t  request[8];
+static uint8_t  response[64];
+static uint8_t  rx_idx = 0;
+
+static uint8_t  current_addr = 100;
+static uint8_t  found_idx = 0;
+static bool     scan_latched = false;
 
 uint16_t calcCRC(uint8_t *buf, uint16_t len) {
     uint16_t crc = 0xFFFF;
@@ -35,17 +44,39 @@ void setup() {
     Serial.begin(115200);
     Serial2.begin(19200, SERIAL_8E1, 16, 17);
     
-    commsOK = false;
-    lastError = 0;
-    operatingMode = 0; 
-    residualCurrent = 0; // Initialize the new variable
+    scanComplete = false;
+    nodeCount = 0;
+    scan_latched = false;
+    state = 0; // Start in IDLE
+    
+    Serial.println("\n=== D64 Network Scanner Initialized ===");
 }
 
 void loop() {
+    
+    // Trigger detection
+    if (startScan && !scan_latched) {
+        scan_latched = true;
+        scanComplete = false;
+        current_addr = 100; // Reset to start of Eaton range
+        found_idx = 0;      // Reset found counter
+        nodeCount = 0;
+        state = 1;
+        Serial.println("-> Starting Network Sweep (100-199)...");
+    }
+    
+    if (!startScan) {
+        scan_latched = false;
+    }
+
     switch (state) {
-        
-        case 0: { // -- 1. REQUEST SERIAL NUMBER --
-            request[0] = SLAVE_ADDR;
+        case 0: { // -- IDLE --
+            // Waiting for startScan to go TRUE
+            break;
+        }
+
+        case 1: { // -- REQUEST SERIAL NUMBER (Ping) --
+            request[0] = current_addr;
             request[1] = 0x03; 
             request[2] = 0x00; request[3] = 0x20; // Reg 32
             request[4] = 0x00; request[5] = 0x10; // 16 Regs
@@ -58,58 +89,49 @@ void loop() {
             
             rx_idx = 0;             
             state_timer = millis(); 
-            state = 1;              
+            state = 2;              
             break;
         } 
 
-        case 1: { // -- 2. WAIT FOR SERIAL NUMBER --
+        case 2: { // -- WAIT FOR SERIAL NUMBER --
             while (Serial2.available() && rx_idx < 64) {
                 response[rx_idx++] = Serial2.read();
-            }
-
-            if (rx_idx >= 5 && response[1] == 0x83) { 
-                commsOK = false;
-                lastError = response[2]; 
-                state_timer = millis();
-                state = 6; // Abort to sleep
-                break;
             }
 
             if (rx_idx >= 5 && response[1] == 0x03) {
                 uint8_t expected_len = 5 + response[2]; 
                 if (rx_idx >= expected_len) {
-                    commsOK = true;
-                    lastError = 0;
                     
+                    // DEVICE FOUND! Save Serial to Array (Direct Pointer Access)
                     uint8_t byteCount = response[2];
                     if (byteCount > 32) byteCount = 32; 
                     
-                    serialNumber.len = byteCount;
+                    nodeSerials[found_idx].len = byteCount;
                     for (uint8_t i = 0; i < byteCount; i++) {
-                        serialNumber.body[i] = response[3 + i];
+                        nodeSerials[found_idx].body[i] = response[3 + i];
                     }
-                    serialNumber.body[byteCount] = '\0'; 
+                    nodeSerials[found_idx].body[byteCount] = '\0'; 
+                    
+                    Serial.printf("Found D64 at Addr: %d\n", current_addr);
                     
                     state_timer = millis(); 
-                    state = 2; // Move to Operating Mode
+                    state = 3; // Proceed to read Mode
                     break; 
                 }
             }
 
-            if (millis() - state_timer > 600) { 
-                commsOK = false;
-                lastError = 1; 
-                state_timer = millis();
-                state = 6; 
+            // Fast Timeout (150ms). If no answer, node is absent. Skip it.
+            if (millis() - state_timer > 150) { 
+                state = 7; // Skip to next address limit check
             }
             break;
         } 
 
-        case 2: { // -- 3. REQUEST OPERATING MODE --
-            request[0] = SLAVE_ADDR;
+        case 3: { // -- REQUEST OPERATING MODE --
+            request[0] = current_addr;
             request[1] = 0x03; 
             request[2] = 0x7D; request[3] = 0x65; // Reg 32101
-            request[4] = 0x00; request[5] = 0x01; // 1 Reg (2 bytes)
+            request[4] = 0x00; request[5] = 0x01; // 1 Reg
             
             uint16_t crc = calcCRC(request, 6);
             request[6] = crc & 0xFF; request[7] = crc >> 8;
@@ -119,51 +141,35 @@ void loop() {
             
             rx_idx = 0;             
             state_timer = millis(); 
-            state = 3;              
+            state = 4;              
             break;
         }
 
-        case 3: { // -- 4. WAIT FOR OPERATING MODE --
+        case 4: { // -- WAIT FOR OPERATING MODE --
             while (Serial2.available() && rx_idx < 64) {
                 response[rx_idx++] = Serial2.read();
-            }
-
-            if (rx_idx >= 5 && response[1] == 0x83) {
-                commsOK = false;
-                lastError = response[2]; 
-                state_timer = millis();
-                state = 6; 
-                break;
             }
 
             if (rx_idx >= 5 && response[1] == 0x03) {
                 uint8_t expected_len = 5 + response[2]; 
                 if (rx_idx >= expected_len) {
-                    commsOK = true;
-                    lastError = 0;
-                    
-                    operatingMode = (response[3] << 8) | response[4];
-                    
+                    // Save Mode to Array (Direct Pointer Access)
+                    nodeModes[found_idx] = (response[3] << 8) | response[4];
                     state_timer = millis(); 
-                    state = 4; // Move to Residual Current
+                    state = 5; 
                     break; 
                 }
             }
-
-            if (millis() - state_timer > 600) {
-                commsOK = false;
-                lastError = 1; 
-                state_timer = millis();
-                state = 6; 
-            }
+            
+            if (millis() - state_timer > 300) { state = 5; } // Timeout, move on
             break;
         }
 
-        case 4: { // -- 5. REQUEST RESIDUAL CURRENT --
-            request[0] = SLAVE_ADDR;
+        case 5: { // -- REQUEST RESIDUAL CURRENT --
+            request[0] = current_addr;
             request[1] = 0x03; 
             request[2] = 0x7D; request[3] = 0x6B; // Reg 32107
-            request[4] = 0x00; request[5] = 0x02; // 2 Regs (4 bytes)
+            request[4] = 0x00; request[5] = 0x02; // 2 Regs
             
             uint16_t crc = calcCRC(request, 6);
             request[6] = crc & 0xFF; request[7] = crc >> 8;
@@ -173,50 +179,46 @@ void loop() {
             
             rx_idx = 0;             
             state_timer = millis(); 
-            state = 5;              
+            state = 6;              
             break;
         }
 
-        case 5: { // -- 6. WAIT FOR RESIDUAL CURRENT --
+        case 6: { // -- WAIT FOR RESIDUAL CURRENT --
             while (Serial2.available() && rx_idx < 64) {
                 response[rx_idx++] = Serial2.read();
-            }
-
-            if (rx_idx >= 5 && response[1] == 0x83) {
-                commsOK = false;
-                lastError = response[2]; 
-                state_timer = millis();
-                state = 6; 
-                break;
             }
 
             if (rx_idx >= 5 && response[1] == 0x03) {
                 uint8_t expected_len = 5 + response[2]; 
                 if (rx_idx >= expected_len) {
-                    commsOK = true;
-                    lastError = 0;
+                    // Save Current to Array (Direct Pointer Access)
+                    nodeCurrents[found_idx] = (response[3] << 24) | (response[4] << 16) | (response[5] << 8) | response[6];
                     
-                    // Reassemble the 32-bit DINT from four 8-bit bytes
-                    residualCurrent = (response[3] << 24) | (response[4] << 16) | (response[5] << 8) | response[6];
+                    // Finalize this Node entry (Direct Pointer Access)
+                    nodeAddresses[found_idx] = current_addr;
+                    found_idx++;
+                    nodeCount = found_idx;
                     
                     state_timer = millis(); 
-                    state = 6; // SUCCESS! Move to sleep
+                    state = 7; 
                     break; 
                 }
             }
 
-            if (millis() - state_timer > 600) {
-                commsOK = false;
-                lastError = 1; 
-                state_timer = millis();
-                state = 6; 
-            }
+            if (millis() - state_timer > 300) { state = 7; } // Timeout, move on
             break;
         }
 
-        case 6: { // -- 7. DELAY BETWEEN POLLS --
-            if (millis() - state_timer > 3000) {
-                state = 0; // Restart cycle
+        case 7: { // -- NEXT ADDRESS & BOUNDARY CHECK --
+            current_addr++;
+            
+            // Stop if we hit address 200 OR if we filled our 50-node array
+            if (current_addr > 199 || found_idx >= 50) {
+                Serial.printf("-> Sweep Complete. Found %d devices.\n", found_idx);
+                scanComplete = true;
+                state = 0; // Return to idle
+            } else {
+                state = 1; // Ping the next address
             }
             break;
         } 
