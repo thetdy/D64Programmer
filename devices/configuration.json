@@ -2,7 +2,7 @@
   "deviceBoard": "ESP32 Generic",
   "communicationPort": "/dev/ttyUSB0",
   "runtimeIpAddress": "",
-  "compileOnly": false,
+  "compileOnly": true,
   "communicationConfiguration": {
     "modbusRTU": {
       "rtuInterface": "Serial",

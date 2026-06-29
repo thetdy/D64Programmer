@@ -59,6 +59,7 @@
         "main": [
           "ReadInputs",
           "WriteOutputs",
+          "TriggerScan",
           "TriggerWrite",
           "WriteDone",
           "WriteError"
