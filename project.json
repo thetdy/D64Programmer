@@ -4,35 +4,7 @@
     "type": "plc-project"
   },
   "data": {
-    "dataTypes": [
-      {
-        "name": "D64_STRUCT",
-        "derivation": "structure",
-        "variable": [
-          {
-            "name": "serialNumber",
-            "type": {
-              "definition": "base-type",
-              "value": "string"
-            }
-          },
-          {
-            "name": "commsOK",
-            "type": {
-              "definition": "base-type",
-              "value": "bool"
-            }
-          },
-          {
-            "name": "lastError",
-            "type": {
-              "definition": "base-type",
-              "value": "int"
-            }
-          }
-        ]
-      }
-    ],
+    "dataTypes": [],
     "pous": [],
     "configuration": {
       "resource": {
@@ -57,12 +29,9 @@
     "debugVariables": {
       "pous": {
         "main": [
-          "ReadInputs",
-          "WriteOutputs",
-          "TriggerScan",
-          "TriggerWrite",
-          "WriteDone",
-          "WriteError"
+          "Start",
+          "Programmer",
+          "Code"
         ]
       }
     },

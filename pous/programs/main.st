@@ -1,47 +1,32 @@
 PROGRAM main
 VAR
 	ReadInputs : READINPUTS_FB;
-	WriteOutputs : WRITEOUTPUTS_FB;
-	TriggerScan : bool;
-	VerifyConfig : bool; (* Set TRUE to verify, FALSE to just count/check serials *)
-	ScanDone : bool;
-	TotalNodes : int;
-	DuplicateFound : bool;
-	ConfigMismatch : bool;
-	FailedNodeAddr : int;
-	TriggerWrite : bool;
-	WriteDone : bool;
-	WriteError : int;
+	Start : bool;
+	Programmer : D64PROGRAMMER_FB;
+	LedBusy : bool AT %QX0.0;
+	LedDone : bool AT %QX0.1;
+	LedError : bool AT %QX0.2;
+	Code : int;
+	NodesProgrammed : int;
+	FailedNode : int;
 END_VAR
 
 // ==============================================================================
-// 1. EXECUTE THE NETWORK SCANNER / VERIFIER
+// 1. HARDWARE I/O READ
 // ==============================================================================
-ReadInputs(startScan := TriggerScan, verifyConfig := VerifyConfig);
-
-// Pull the status variables out of the block so we can see them in the debugger
-ScanDone       := ReadInputs.scanComplete;
-TotalNodes     := ReadInputs.nodeCount;
-DuplicateFound := ReadInputs.duplicateFound;
-ConfigMismatch := ReadInputs.configMismatch;
-FailedNodeAddr := ReadInputs.failedNodeAddr;
-
-IF ScanDone THEN
-    // Auto-reset the trigger so it doesn't immediately scan again
-    TriggerScan := FALSE;
-END_IF;
+// Call the block to run the C++ debounce logic
+ReadInputs(BtnStart => Start);
 
 // ==============================================================================
-// 2. WRITE OUTPUTS (Programming the D64s)
+// 2. D64 MASTER PROGRAMMER LOGIC
 // ==============================================================================
-WriteOutputs(Execute := TriggerWrite);
-
-WriteDone  := WriteOutputs.Done;
-WriteError := WriteOutputs.Error;
-
-// Auto-reset trigger after successful write
-IF WriteDone AND (WriteError = 0) THEN
-    TriggerWrite := FALSE;
-END_IF;
+// Pass the debounced physical button directly into the sequencer's Execute pin
+Programmer(Execute        := Start,
+           Busy           => LedBusy,
+           Done           => LedDone,
+           Error          => LedError,
+           ErrorCode      => Code,
+           TotalNodes     => NodesProgrammed,
+           FailedNodeAddr => FailedNode);
 
 END_PROGRAM
