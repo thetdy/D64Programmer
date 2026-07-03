@@ -1,14 +1,17 @@
 PROGRAM main
 VAR
-	ReadInputs : READINPUTS_FB;
-	Start : bool;
-	Programmer : D64PROGRAMMER_FB;
-	LedBusy : bool AT %QX0.0;
-	LedDone : bool AT %QX0.1;
-	LedError : bool AT %QX0.2;
-	Code : int;
-	NodesProgrammed : int;
-	FailedNode : int;
+	ReadInputs: READINPUTS_FB;
+	Start: BOOL;
+	Programmer: D64PROGRAMMER_FB;
+	LedBusy: BOOL AT %QX0.0;
+	LedDone: BOOL AT %QX0.1;
+	LedError: BOOL AT %QX0.2;
+	Error: INT;
+	NodesProgrammed: INT;
+	FailedNode: INT;
+	SetTargetCurrent: UDINT := 30;
+	SetResponseDelay: UDINT := 0;
+	ErrorCodes: ERRORCODES_ENUM;
 END_VAR
 
 // ==============================================================================
@@ -21,12 +24,14 @@ ReadInputs(BtnStart => Start);
 // 2. D64 MASTER PROGRAMMER LOGIC
 // ==============================================================================
 // Pass the debounced physical button directly into the sequencer's Execute pin
-Programmer(Execute        := Start,
-           Busy           => LedBusy,
-           Done           => LedDone,
-           Error          => LedError,
-           ErrorCode      => Code,
-           TotalNodes     => NodesProgrammed,
-           FailedNodeAddr => FailedNode);
+Programmer(I_Execute := Start,
+           I_TargetCurrent := SetTargetCurrent,
+           I_ResponseDelay := SetResponseDelay,
+           O_Busy => LedBusy,
+           O_Done => LedDone,
+           O_Error => LedError,
+           O_ErrorCode => Error,
+           O_TotalNodes => NodesProgrammed,
+           O_FailedNodeAddr => FailedNode);
 
 END_PROGRAM

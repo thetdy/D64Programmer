@@ -1,6 +1,6 @@
 FUNCTION_BLOCK ReadInputs_FB
 VAR_OUTPUT
-  BtnStart : bool; (* Debounced output for the Start sequence *)
+	BtnStart : bool; (* Debounced output for the Start sequence *)
 END_VAR
 /* ================================================================
  * C/C++ FUNCTION BLOCK : Hardware INIT & Debounce

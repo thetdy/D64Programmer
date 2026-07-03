@@ -1,15 +1,17 @@
 FUNCTION_BLOCK D64PROGRAMMER_FB
 VAR_INPUT
-  Execute : bool; (* Rising edge starts the whole sequence *)
+	I_Execute : bool; (* Rising edge starts the whole sequence *)
+	I_TargetCurrent : udint; (* Target current in mA *)
+	I_ResponseDelay : udint; (* Response delay in ms *)
 END_VAR
 
 VAR_OUTPUT
-  Busy : bool; (* TRUE while scanning/programming *)
-  Done : bool; (* TRUE when everything passes *)
-  Error : bool; (* TRUE if any step fails *)
-  ErrorCode : int; (* 1=Dup Serial, 2=Write Fail, 3=Verify Fail, 4=No Nodes Found *)
-  TotalNodes : int; (* Total number of D64s found and programmed *)
-  FailedNodeAddr : int; (* The specific Modbus address that caused an error *)
+	O_Busy : bool; (* TRUE while scanning/programming *)
+	O_Done : bool; (* TRUE when everything passes *)
+	O_Error : bool; (* TRUE if any step fails *)
+	O_ErrorCode : int; (* 0=No Errors, 1=Write Fail, 2=Verify Fail, 3=No Nodes Found, 4=Dup Serial *)
+	O_TotalNodes : int; (* Total number of D64s found and programmed *)
+	O_FailedNodeAddr : int; (* The specific Modbus address that caused an error *)
 END_VAR
 /* ================================================================
  * D64 Modbus RTU - Unified Sequencer (Scan -> Program -> Verify)
@@ -34,7 +36,7 @@ static char    internal_serials[50][33];
 
 // -- Hardcoded Verification Targets --
 const uint16_t TARGET_MODE = 1;
-const uint32_t TARGET_CURRENT = 30;
+
 
 uint16_t calcCRC(uint8_t *buf, uint16_t len) {
     uint16_t crc = 0xFFFF;
@@ -52,33 +54,33 @@ void setup() {
     Serial.begin(115200);
     Serial2.begin(19200, SERIAL_8E1, 16, 17);
     
-    Busy = false;
-    Done = false;
-    Error = false;
-    ErrorCode = 0;
-    TotalNodes = 0;
-    FailedNodeAddr = 0;
+    O_Busy = false;
+    O_Done = false;
+    O_Error = false;
+    O_ErrorCode = 0;
+    O_TotalNodes = 0;
+    O_FailedNodeAddr = 0;
     seq_latched = false;
     state = 0; 
 }
 
 void loop() {
     // 1. Edge Detection & Initialization
-    if (Execute && !seq_latched) {
+    if (I_Execute && !seq_latched) {
         seq_latched = true;
-        Busy = true;
-        Done = false;
-        Error = false;
-        ErrorCode = 0;
-        TotalNodes = 0;
-        FailedNodeAddr = 0;
+        O_Busy = true;
+        O_Done = false;
+        O_Error = false;
+        O_ErrorCode = 0;
+        O_TotalNodes = 0;
+        O_FailedNodeAddr = 0;
         
         current_addr = 100; 
         found_idx = 0;      
         state = 1; // Start Scan Phase
     }
     
-    if (!Execute) seq_latched = false;
+    if (!I_Execute) seq_latched = false;
 
     switch (state) {
         case 0: break; // IDLE
@@ -135,7 +137,7 @@ void loop() {
             if (current_addr > 199 || found_idx >= 50) {
                 
                 if (found_idx == 0) {
-                    ErrorCode = 4; // Error: No Nodes Found
+                    O_ErrorCode = 3; // Error: No Nodes Found
                     state = 99;
                     break;
                 }
@@ -151,10 +153,10 @@ void loop() {
                 }
                 
                 if (dup) {
-                    ErrorCode = 1; // Error: Duplicate Serials
+                    O_ErrorCode = 4; // Error: Duplicate Serials
                     state = 99;
                 } else {
-                    TotalNodes = found_idx;
+                    O_TotalNodes = found_idx;
                     node_idx = 0;
                     state = 10; // Move to Programming Phase
                 }
@@ -192,21 +194,21 @@ void loop() {
             if (Serial2.available() >= 8) {
                 state = 12;
             } else if (millis() - state_timer > 600) {
-                ErrorCode = 2; // Write Timeout
-                FailedNodeAddr = valid_nodes[node_idx];
+                O_ErrorCode = 1; // Write Timeout
+                O_FailedNodeAddr = valid_nodes[node_idx];
                 state = 99;
             }
             break;
         }
 
-        case 12: { // WRITE CURRENT (32107 = TARGET_CURRENT)
+        case 12: { // WRITE CURRENT (32107 = I_TargetCurrent)
             request[0] = valid_nodes[node_idx];
             request[1] = 0x10; 
             request[2] = 0x7D; request[3] = 0x6B; 
             request[4] = 0x00; request[5] = 0x02; 
             request[6] = 0x04; 
-            request[7] = (TARGET_CURRENT >> 24) & 0xFF; request[8] = (TARGET_CURRENT >> 16) & 0xFF; 
-            request[9] = (TARGET_CURRENT >> 8) & 0xFF;  request[10] = TARGET_CURRENT & 0xFF; 
+            request[7] = (I_TargetCurrent >> 24) & 0xFF; request[8] = (I_TargetCurrent >> 16) & 0xFF; 
+            request[9] = (I_TargetCurrent >> 8) & 0xFF;  request[10] = I_TargetCurrent & 0xFF; 
             
             uint16_t crc = calcCRC(request, 11);
             request[11] = crc & 0xFF; request[12] = crc >> 8;
@@ -221,6 +223,37 @@ void loop() {
 
         case 13: { // WAIT WRITE CURRENT
             if (Serial2.available() >= 8) {
+                state = 14; // Go to WRITE DELAY
+            } else if (millis() - state_timer > 600) {
+                O_ErrorCode = 1; 
+                O_FailedNodeAddr = valid_nodes[node_idx];
+                state = 99;
+            }
+            break;
+        }
+
+        case 14: { // WRITE DELAY (32112 = I_ResponseDelay)
+            request[0] = valid_nodes[node_idx];
+            request[1] = 0x10; 
+            request[2] = 0x7D; request[3] = 0x70; 
+            request[4] = 0x00; request[5] = 0x02; 
+            request[6] = 0x04; 
+            request[7] = (I_ResponseDelay >> 24) & 0xFF; request[8] = (I_ResponseDelay >> 16) & 0xFF; 
+            request[9] = (I_ResponseDelay >> 8) & 0xFF;  request[10] = I_ResponseDelay & 0xFF; 
+            
+            uint16_t crc = calcCRC(request, 11);
+            request[11] = crc & 0xFF; request[12] = crc >> 8;
+
+            while(Serial2.available()) Serial2.read(); 
+            Serial2.write(request, 13);
+            
+            state_timer = millis(); 
+            state = 15;              
+            break;
+        }
+
+        case 15: { // WAIT WRITE DELAY
+            if (Serial2.available() >= 8) {
                 node_idx++;
                 if (node_idx >= found_idx) {
                     node_idx = 0;
@@ -229,8 +262,8 @@ void loop() {
                     state = 10; // Program next node
                 }
             } else if (millis() - state_timer > 600) {
-                ErrorCode = 2; 
-                FailedNodeAddr = valid_nodes[node_idx];
+                O_ErrorCode = 1; 
+                O_FailedNodeAddr = valid_nodes[node_idx];
                 state = 99;
             }
             break;
@@ -265,8 +298,8 @@ void loop() {
                 if (rx_idx >= expected) {
                     uint16_t read_mode = (response[3] << 8) | response[4];
                     if (read_mode != TARGET_MODE) {
-                        ErrorCode = 3; // Verify Failed
-                        FailedNodeAddr = valid_nodes[node_idx];
+                        O_ErrorCode = 2; // Verify Failed
+                        O_FailedNodeAddr = valid_nodes[node_idx];
                         state = 99;
                     } else {
                         state = 22;
@@ -274,7 +307,7 @@ void loop() {
                     break;
                 }
             }
-            if (millis() - state_timer > 600) { ErrorCode = 2; FailedNodeAddr = valid_nodes[node_idx]; state = 99; }
+            if (millis() - state_timer > 600) { O_ErrorCode = 1; O_FailedNodeAddr = valid_nodes[node_idx]; state = 99; }
             break;
         }
 
@@ -303,14 +336,53 @@ void loop() {
                 uint8_t expected = 5 + response[2]; 
                 if (rx_idx >= expected) {
                     uint32_t read_current = (response[3] << 24) | (response[4] << 16) | (response[5] << 8) | response[6];
-                    if (read_current != TARGET_CURRENT) {
-                        ErrorCode = 3; // Verify Failed
-                        FailedNodeAddr = valid_nodes[node_idx];
+                    if (read_current != I_TargetCurrent) {
+                        O_ErrorCode = 2; // Verify Failed
+                        O_FailedNodeAddr = valid_nodes[node_idx];
+                        state = 99;
+                    } else {
+                        state = 24; // VERIFY DELAY
+                    }
+                    break;
+                }
+            }
+            if (millis() - state_timer > 600) { O_ErrorCode = 1; O_FailedNodeAddr = valid_nodes[node_idx]; state = 99; }
+            break;
+        }
+
+        case 24: { // READ DELAY
+            request[0] = valid_nodes[node_idx];
+            request[1] = 0x03; 
+            request[2] = 0x7D; request[3] = 0x70; 
+            request[4] = 0x00; request[5] = 0x02; 
+            
+            uint16_t crc = calcCRC(request, 6);
+            request[6] = crc & 0xFF; request[7] = crc >> 8;
+
+            while(Serial2.available()) Serial2.read(); 
+            Serial2.write(request, 8);
+            
+            rx_idx = 0;             
+            state_timer = millis(); 
+            state = 25;              
+            break;
+        }
+
+        case 25: { // VERIFY DELAY
+            while (Serial2.available() && rx_idx < 64) response[rx_idx++] = Serial2.read();
+
+            if (rx_idx >= 5 && response[1] == 0x03) {
+                uint8_t expected = 5 + response[2]; 
+                if (rx_idx >= expected) {
+                    uint32_t read_delay = (response[3] << 24) | (response[4] << 16) | (response[5] << 8) | response[6];
+                    if (read_delay != I_ResponseDelay) {
+                        O_ErrorCode = 2; // Verify Failed
+                        O_FailedNodeAddr = valid_nodes[node_idx];
                         state = 99;
                     } else {
                         node_idx++;
                         if (node_idx >= found_idx) {
-                            Done = true; // ENTIRE PROCESS COMPLETE!
+                            O_Done = true; // ENTIRE PROCESS COMPLETE!
                             state = 99;
                         } else {
                             state = 20; // Verify next node
@@ -319,7 +391,7 @@ void loop() {
                     break;
                 }
             }
-            if (millis() - state_timer > 600) { ErrorCode = 2; FailedNodeAddr = valid_nodes[node_idx]; state = 99; }
+            if (millis() - state_timer > 600) { O_ErrorCode = 1; O_FailedNodeAddr = valid_nodes[node_idx]; state = 99; }
             break;
         }
 
@@ -327,11 +399,11 @@ void loop() {
         // FINISH / ABORT
         // ==========================================
         case 99: { 
-            Busy = false;
-            if (ErrorCode > 0) Error = true;
+            O_Busy = false;
+            if (O_ErrorCode > 0) O_Error = true;
             
-            // Wait for user to release the Execute button
-            if (!Execute) {
+            // Wait for user to release the I_Execute button
+            if (!I_Execute) {
                 seq_latched = false;
                 state = 0;
             }

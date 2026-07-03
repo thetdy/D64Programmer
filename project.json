@@ -4,7 +4,30 @@
     "type": "plc-project"
   },
   "data": {
-    "dataTypes": [],
+    "dataTypes": [
+      {
+        "name": "ERRORCODES_ENUM",
+        "derivation": "enumerated",
+        "initialValue": "",
+        "values": [
+          {
+            "description": "NO_ERRORS"
+          },
+          {
+            "description": "WRITE_FAIL"
+          },
+          {
+            "description": "VERIFY_FAIL"
+          },
+          {
+            "description": "NO_NODES_FOUND"
+          },
+          {
+            "description": "DUP_SERIAL"
+          }
+        ]
+      }
+    ],
     "pous": [],
     "configuration": {
       "resource": {
