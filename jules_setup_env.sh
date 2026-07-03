@@ -21,7 +21,7 @@ sudo apt-get install -y git build-essential bison flex python3 python3-pip curl
 
 echo "=== [2/5] Fetching OpenPLC Editor Source Code (${OPENPLC_VERSION}) ==="
 # Clone the specific version tag provided by the user
-git clone --depth 1 --branch ${OPENPLC_VERSION} https://github.com /tmp/openplc-editor
+git clone --depth 1 --branch ${OPENPLC_VERSION} https://github.com/thiagoralves/OpenPLC_Editor.git /tmp/openplc-editor
 
 echo "=== [3/5] Building matiec (IEC 61131-3 to C Compiler Toolchain) ==="
 cd /tmp/openplc-editor/matiec
@@ -33,12 +33,12 @@ cd $PROJECT_DIR
 
 echo "=== [4/5] Setting up Arduino CLI & ESP32 Core Packages ==="
 # Download and install Arduino-CLI toolchain used by OpenPLC under the hood
-curl -fsSL https://githubusercontent.com | sh
+curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
 export PATH=$PATH:$PROJECT_DIR/bin
 
 # Configure arduino-cli for ESP32 boards
 bin/arduino-cli config init --overwrite
-bin/arduino-cli config set board_manager.additional_urls https://githubusercontent.com
+bin/arduino-cli config set board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
 bin/arduino-cli core update-index
 
 echo "Installing ESP32 core components..."
