@@ -1,6 +1,6 @@
 FUNCTION_BLOCK ReadInputs_FB
 VAR_OUTPUT
-	BtnStart : bool; (* Debounced output for the Start sequence *)
+	O_BtnStart : bool; (* Debounced output for the Start sequence *)
 END_VAR
 /* ================================================================
  * C/C++ FUNCTION BLOCK : Hardware INIT & Debounce
@@ -56,7 +56,7 @@ void loop()
     lastButtonState = raw;
 
     // Output the clean, debounced state to the OpenPLC engine
-    BtnStart = buttonState;
+    O_BtnStart = buttonState;
 }
 
 END_FUNCTION_BLOCK

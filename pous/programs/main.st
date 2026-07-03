@@ -18,7 +18,7 @@ END_VAR
 // 1. HARDWARE I/O READ
 // ==============================================================================
 // Call the block to run the C++ debounce logic
-ReadInputs(BtnStart => Start);
+ReadInputs(O_BtnStart => Start);
 
 // ==============================================================================
 // 2. D64 MASTER PROGRAMMER LOGIC
