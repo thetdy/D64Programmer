@@ -10,7 +10,7 @@ VAR
 	NodesProgrammed: INT;
 	FailedNode: INT;
 	SetTargetCurrent: UDINT := 30;
-	SetResponseDelay: UDINT := 0;
+	SetResponseDelay: UDINT := 200;
 	ErrorCodes: ERRORCODES_ENUM;
 END_VAR
 
