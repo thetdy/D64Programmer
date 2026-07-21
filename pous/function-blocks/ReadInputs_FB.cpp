@@ -20,13 +20,14 @@ void setup()
     // --- Configure LED Output Pins ---
     // Change these to match your LED GPIO pins. 
     // Initializing them here prevents them from flashing randomly on boot.
+    // Note: GPIO 21 and 22 are reserved for the I2C LCD (SDA/SCL).
     pinMode(19, OUTPUT);           // Busy LED 
-    pinMode(21, OUTPUT);           // Done LED
-    pinMode(22, OUTPUT);           // Error LED
+    pinMode(25, OUTPUT);           // Done LED
+    pinMode(26, OUTPUT);           // Error LED
 
     digitalWrite(19, LOW);
-    digitalWrite(21, LOW);
-    digitalWrite(22, LOW);
+    digitalWrite(25, LOW);
+    digitalWrite(26, LOW);
 
     printf("BoardINIT: Pins configured with software debounce\n");
 }
