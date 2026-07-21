@@ -8,7 +8,7 @@ This project implements a custom **Modbus RTU Master** designed to simultaneousl
 - **Networking:** RS-485 via TTL-to-RS485 module (with auto flow control)
 - **Bus Power:** 24V bus harness
 - **Display:** DFRobot Gravity I2C 16x2 Arduino LCD with RGB Font Display (Black) - SKU: DFR0554 (Native 3.3V/5V compatible).
-- **Physical UI:** 1x Momentary Pushbutton (Start), 3x Status LEDs (Yellow=Busy, Green=Done, Red=Error).
+- **Physical UI:** 1x Momentary Pushbutton (Start).
 
 ## Hardware Wiring Guide
 
@@ -18,9 +18,6 @@ This project implements a custom **Modbus RTU Master** designed to simultaneousl
   - TX -> GPIO 17
 - **Physical UI:**
   - Start Button -> GPIO 18 (INPUT_PULLDOWN)
-  - Busy LED (Yellow) -> GPIO 19
-  - Done LED (Green) -> GPIO 25 *(Remapped due to LCD I2C)*
-  - Error LED (Red) -> GPIO 26 *(Remapped due to LCD I2C)*
 - **DFRobot LCD (I2C):**
   - VCC -> 5V or 3V3 pin
   - GND -> GND

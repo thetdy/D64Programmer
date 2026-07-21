@@ -3,9 +3,9 @@ VAR
 	ReadInputs: READINPUTS_FB;
 	Start: BOOL;
 	Programmer: D64PROGRAMMER_FB;
-	LedBusy: BOOL AT %QX0.0;
-	LedDone: BOOL AT %QX0.1;
-	LedError: BOOL AT %QX0.2;
+	LedBusy: BOOL;
+	LedDone: BOOL;
+	LedError: BOOL;
 	Error: INT;
 	NodesProgrammed: INT;
 	FailedNode: INT;

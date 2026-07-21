@@ -11,7 +11,7 @@ The codebase relies on a strict separation of concerns, utilizing a hybrid archi
 - **Language:** C/C++ Function Block.
 - **Role:** Directly interfaces with the ESP32 hardware pins to bypass OpenPLC's default scanning lag for initialization.
 - **Mechanism:**
-  - Uses standard Arduino `pinMode()` in the `setup()` function to initialize the physical Start button (configured with `INPUT_PULLDOWN`) and status LEDs. Note that the LEDs are mapped to GPIO 19, 25, and 26 to free up pins 21 and 22 for I2C.
+  - Uses standard Arduino `pinMode()` in the `setup()` function to initialize the physical Start button (configured with `INPUT_PULLDOWN`) (the status LEDs have been removed in favor of the I2C LCD).
   - Implements a `millis()`-based 50ms software debounce to filter out electrical noise from the physical pushbutton.
   - Outputs a clean, rising-edge boolean signal to the OpenPLC engine.
 
@@ -33,6 +33,6 @@ The codebase relies on a strict separation of concerns, utilizing a hybrid archi
 - **Language:** IEC 61131-3 Structured Text (ST).
 - **Role:** Acts as the wiring diagram holding the blocks together.
 - **Mechanism:**
-  - Maps physical hardware to OpenPLC's native addressing (e.g., `%IX0.0` for the Start button, `%QX0.0`, `%QX0.1`, `%QX0.2` for Busy, Done, and Error LEDs).
+  - Maps physical hardware to OpenPLC's native addressing (e.g., `%IX0.0` for the Start button, internal variables for Busy, Done, and Error states).
   - Triggers the sequencer using the debounced button.
-  - Routes the sequencer's outputs directly to the physical LEDs and OpenPLC debugger variables.
+  - Routes the sequencer.s outputs directly to internal OpenPLC and OpenPLC debugger variables.
