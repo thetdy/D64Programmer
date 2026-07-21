@@ -17,9 +17,15 @@ END_VAR
  * D64 Modbus RTU - Unified Sequencer (Scan -> Program -> Verify)
  * ================================================================ */
 
-#include <Arduino.h> 
+#include <Arduino.h>
+#include <Wire.h>
+#include "DFRobot_LCD.h"
+
+DFRobot_LCD lcd(16, 2);
+
 
 static uint8_t  state = 0;
+static uint8_t  last_state = 255;
 static uint32_t state_timer = 0;
 static uint8_t  request[16];
 static uint8_t  response[64];
@@ -54,6 +60,13 @@ void setup() {
     Serial.begin(115200);
     Serial2.begin(19200, SERIAL_8E1, 16, 17);
     
+    lcd.init();
+    lcd.setRGB(0, 255, 0); // Green backlight example
+    lcd.setCursor(0, 0);
+    lcd.print("D64 Programmer");
+    lcd.setCursor(0, 1);
+    lcd.print("Ready...");
+
     O_Busy = false;
     O_Done = false;
     O_Error = false;
@@ -81,6 +94,29 @@ void loop() {
     }
     
     if (!I_Execute) seq_latched = false;
+
+    if (state != last_state) {
+        last_state = state;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        if (state == 0) { lcd.setRGB(0, 255, 0); lcd.print("D64 Programmer"); lcd.setCursor(0, 1); lcd.print("Ready..."); }
+        else if (state >= 1 && state < 10) { lcd.setRGB(255, 255, 0); lcd.print("Scanning..."); }
+        else if (state >= 10 && state < 20) { lcd.setRGB(255, 255, 0); lcd.print("Programming..."); lcd.setCursor(0, 1); lcd.print("Nodes: "); lcd.print(found_idx); }
+        else if (state >= 20 && state < 99) { lcd.setRGB(255, 255, 0); lcd.print("Verifying..."); lcd.setCursor(0, 1); lcd.print("Nodes: "); lcd.print(found_idx); }
+        else if (state == 99) {
+            if (O_ErrorCode > 0) {
+                lcd.setRGB(255, 0, 0);
+                lcd.print("Error: "); lcd.print(O_ErrorCode);
+                lcd.setCursor(0, 1);
+                lcd.print("Node: "); lcd.print(O_FailedNodeAddr);
+            } else {
+                lcd.setRGB(0, 255, 0);
+                lcd.print("Done!");
+                lcd.setCursor(0, 1);
+                lcd.print("Nodes Prog: "); lcd.print(O_TotalNodes);
+            }
+        }
+    }
 
     switch (state) {
         case 0: break; // IDLE

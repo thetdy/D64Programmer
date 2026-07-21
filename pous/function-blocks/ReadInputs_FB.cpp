@@ -17,16 +17,6 @@ void setup()
     // Change '18' to whichever GPIO pin your physical button is wired to
     pinMode(18, INPUT_PULLDOWN);   // BtnStart 
 
-    // --- Configure LED Output Pins ---
-    // Change these to match your LED GPIO pins. 
-    // Initializing them here prevents them from flashing randomly on boot.
-    pinMode(19, OUTPUT);           // Busy LED 
-    pinMode(21, OUTPUT);           // Done LED
-    pinMode(22, OUTPUT);           // Error LED
-
-    digitalWrite(19, LOW);
-    digitalWrite(21, LOW);
-    digitalWrite(22, LOW);
 
     printf("BoardINIT: Pins configured with software debounce\n");
 }
